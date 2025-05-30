@@ -1,0 +1,12 @@
+train: C:\YOLO\Vehicle-Counting-and-Classification\data\VeiculoT2\train\images
+val: C:\YOLO\Vehicle-Counting-and-Classification\data\VeiculoT2\valid\images
+test: C:\YOLO\Vehicle-Counting-and-Classification\data\Veiculo2\test\images
+nc: 5
+names: ['bicycle', 'bus', 'car', 'motorcycle', 'truck']
+
+roboflow:
+  workspace: vehiclecounting-id5od
+  project: vehicle-counting-t2uij
+  version: 9
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/vehiclecounting-id5od/vehicle-counting-t2uij/dataset/9

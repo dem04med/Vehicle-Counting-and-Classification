@@ -1,0 +1,12 @@
+# Ficheiros/pastas temporárias ou geradas:
+output/
+*.mp4
+*.avi
+*.txt
+*.log
+
+# Virtual environment:
+venv/
+.env
+__pycache__/
+*.pyc
