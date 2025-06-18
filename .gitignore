@@ -1,6 +1,7 @@
 # Ficheiros/pastas temporárias ou geradas:
 output/
-*.mp4
+output.*
+input_videos/
 *.avi
 *.txt
 *.log
