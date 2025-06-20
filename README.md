@@ -19,6 +19,17 @@ git clone https://github.com/ultralytics/yolov5.git yolov5
 pip install -r requirements.txt
 ```
 
+## OpenRouterAPI_KEY
+Aceder o seguinte link: https://openrouter.ai/keys
+Efetuar login e, posteriormente, criar API_KEY.
+```bash
+mkdir .env
+```
+No seu ficheiro .env definir a variável correspondente à API_KEY criada.
+```bash
+OPENROUTER_API_KEY=SUA_API_KEY...
+```
+
 ## Data Model Training
 Considering that the folder referring to the cloned YOLO repository has the name yolov5:
 ```bash
