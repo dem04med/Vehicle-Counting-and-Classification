@@ -2,10 +2,11 @@ from dotenv import load_dotenv
 import openai
 import os
 from fpdf import FPDF
+from analise_anomalias import detectar_anomalias_video_unico  # <- NOVO
 
 # === CONFIGURAÇÕES ===
 
-load_dotenv()  # Carrega variáveis do .env
+load_dotenv()
 
 openai.api_key = os.getenv("OPENROUTER_API_KEY")
 openai.api_base = "https://openrouter.ai/api/v1"
@@ -14,6 +15,7 @@ if not openai.api_key:
     raise ValueError("❌ A chave de API do OpenRouter não foi definida. Define a variável de ambiente OPENROUTER_API_KEY.")
 
 TXT_PATH = "output/vehicle_counts.txt"
+
 
 # === FUNÇÕES ===
 
@@ -43,19 +45,55 @@ def parse_vehicle_stats(txt_path):
     return stats, total
 
 
-def generate_prompt(stats, total):
-    prompt = "Gere um relatório objetivo e conciso com base nas seguintes estatísticas de contagem de veículos:\n"
-    prompt += f"\nTotal de veículos detetados: {total}\n"
+def formatar_anomalias(anomalias):
+    if not anomalias:
+        return "Nenhuma anomalia foi detetada com base nas estatísticas deste vídeo."
+
+    texto = "As seguintes anomalias foram detetadas na análise local do vídeo:\n"
+    for a in anomalias:
+        texto += f"- {a}\n"
+    return texto
+
+
+def generate_prompt(stats, total, anomalias_texto=""):
+    prompt = (
+        "Gere um relatório técnico e estruturado com base nas seguintes estatísticas de contagem de veículos.\n"
+        "O relatório deve seguir este formato e estrutura obrigatórios:\n\n"
+
+        "=== Estatísticas Gerais ===\n"
+        "Inclua o total de veículos detetados.\n\n"
+
+        "=== Análise por Classe ===\n"
+        "Para cada classe, apresente de forma clara:\n"
+        "- Nome da classe\n"
+        "- Número de veículos detetados\n"
+        "- Percentagem em relação ao total\n"
+        "- Confiança média (com duas casas decimais)\n\n"
+
+        "=== Anomalias Detetadas ===\n"
+        "Liste cada anomalia detetada com bullet points (•).\n"
+        "Se não existirem anomalias, escreva: 'Nenhuma anomalia foi detetada.'\n\n"
+
+        "Evite cortar informação. Use linhas completas. Use linguagem clara e objetiva.\n"
+        "Evite frases demasiado longas e não omita dados relevantes.\n\n"
+
+        "=== Dados para Análise ===\n"
+        f"Total de veículos detetados: {total}\n"
+    )
 
     for cls, data in stats.items():
         prompt += (
             f"\nClasse: {cls}\n"
-            f" - Contagem: {data['count']}\n"
-            f" - Percentagem: {data['percentage']}%\n"
-            f" - Confiança média: {data['avg_conf']:.2f}\n"
+            f"- Contagem: {data['count']}\n"
+            f"- Percentagem: {data['percentage']}%\n"
+            f"- Confiança média: {data['avg_conf']:.2f}\n"
         )
 
-    prompt += "\nO relatório deve resumir os dados e indicar observações relevantes."
+    if anomalias_texto:
+        prompt += "\n\n=== Análise de Anomalias ===\n"
+        prompt += anomalias_texto
+
+    prompt += "\n\nGere o relatório seguindo rigorosamente o formato acima."
     return prompt
 
 
@@ -65,11 +103,33 @@ def gerar_relatorio_llm(prompt, modelo="mistralai/mistral-7b-instruct"):
             model=modelo,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.6,
-            max_tokens=400
+            max_tokens=1500
         )
         return response["choices"][0]["message"]["content"]
     except openai.error.OpenAIError as e:
         return f"❌ Erro ao gerar relatório com o LLM: {str(e)}"
+
+
+def limpar_caracteres(texto):
+    """Remove ou substitui caracteres incompatíveis com a codificação 'latin-1' usada pelo FPDF."""
+    substituicoes = {
+        "❗": "[!]",
+        "⚠️": "[Atenção]",
+        "→": "->",
+        "–": "-",
+        "—": "-",
+        "’": "'",
+        "“": '"',
+        "”": '"',
+        "•": "-",
+        "✔": "[ok]",
+        "✖": "[x]",
+        "🛈": "[info]",
+        "➡": "->"
+    }
+    for char, substituto in substituicoes.items():
+        texto = texto.replace(char, substituto)
+    return texto
 
 
 def gerar_pdf(relatorio_texto, caminho_pdf):
@@ -78,16 +138,26 @@ def gerar_pdf(relatorio_texto, caminho_pdf):
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.set_font("Arial", size=12)
 
+    # Limpar caracteres antes de gerar PDF
+    relatorio_texto = limpar_caracteres(relatorio_texto)
+
     for linha in relatorio_texto.split("\n"):
-        pdf.cell(200, 10, txt=linha, ln=True)
+        pdf.multi_cell(0, 10, txt=linha)
 
     pdf.output(caminho_pdf)
+
 
 # === EXECUÇÃO PRINCIPAL ===
 
 def main():
     stats, total = parse_vehicle_stats(TXT_PATH)
-    prompt = generate_prompt(stats, total)
+
+    # Nova análise de anomalias (sem histórico)
+    anomalias = detectar_anomalias_video_unico(stats, total)
+    texto_anomalias = formatar_anomalias(anomalias)
+
+    # Geração do prompt
+    prompt = generate_prompt(stats, total, texto_anomalias)
 
     print("\n🔹 PROMPT ENVIADO PARA O LLM:\n")
     print(prompt)
@@ -98,7 +168,7 @@ def main():
 
     # Guardar como .txt
     relatorio_txt_path = "output/relatorio_gerado.txt"
-    with open(relatorio_txt_path, "w", encoding="utf-8") as f:
+    with open(relatorio_txt_path, "w", encoding='utf-8') as f:
         f.write(relatorio)
     print(f"\n✅ Relatório de texto guardado em: {relatorio_txt_path}")
 
