@@ -5,7 +5,6 @@ Counting and Classifying Vehicles in Video Using YOLOv5
 Create an automatic system that detects and counts vehicles by type in traffic videos, using YOLOv5, with evaluation of its accuracy and performance.
 
 ## Environment Setup
-To run the repository in a more isolated environment, it is recommended to create a virtual environment:
 
 ```bash
 python -m venv venv
