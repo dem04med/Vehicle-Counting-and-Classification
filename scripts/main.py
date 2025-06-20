@@ -205,26 +205,6 @@ with open(counts_file, 'w', encoding='utf-8') as f:
 
 print(f"[INFO] Estatísticas gravadas em: {counts_file}")
 
-# === Guardar histórico das contagens ===
-try:
-    historico = []
-    if os.path.exists(historico_path):
-        with open(historico_path, 'r', encoding='utf-8') as f:
-            historico = json.load(f)
-
-    nova_entrada = {
-        "counts": vehicle_counts,
-        "total": total_count
-    }
-    historico.append(nova_entrada)
-    historico = historico[-10:]
-
-    with open(historico_path, 'w', encoding='utf-8') as f:
-        json.dump(historico, f, indent=4)
-    print(f"[INFO] Histórico de contagens atualizado em: {historico_path}")
-except Exception as e:
-    print(f"[ERRO] Não foi possível atualizar o histórico: {e}")
-
 # === GERAÇÃO DO RELATÓRIO COM LLM ===
 print("\n[INFO] A gerar relatório com LLM...\n")
 from report_generator import main as gerar_relatorio_main
