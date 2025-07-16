@@ -3,6 +3,7 @@ import os
 import torch
 import cv2
 import numpy as np
+import json  # para salvar histórico de contagens
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from deep_sort.deep_sort import DeepSort
@@ -10,18 +11,19 @@ from deep_sort.deep_sort import DeepSort
 # Caminhos do modelo e vídeo
 model_path = r'C:\YOLO\Vehicle-Counting-and-Classification\yolov5\runs\train\exp2\weights\best.pt'
 video_path = r'C:\YOLO\Vehicle-Counting-and-Classification\input_videos\video.mp4'
-output_path = r'C:\YOLO\Vehicle-Counting-and-Classification\output\video1.mp4'
+output_path = r'C:\YOLO\Vehicle-Counting-and-Classification\output\video.mp4'
 counts_file = r'C:\YOLO\Vehicle-Counting-and-Classification\output\vehicle_counts.txt'
+historico_path = r'C:\YOLO\Vehicle-Counting-and-Classification\output\historico_contagens.json'  # NOVO
 
 # Carregar modelo YOLOv5
 model = torch.hub.load('yolov5', 'custom', path=model_path, source='local')
 model.conf = 0.6  # Limiar de confiança
 
-# Inicializar Deep SORT
+# Inicialização do Deep SORT
 deepsort = DeepSort(r"C:\YOLO\Vehicle-Counting-and-Classification\deep_sort\deep_sort\deep\checkpoint\ckpt.t7",
                     max_age=100, n_init=2, nn_budget=100)
 
-# Abrir vídeo
+# Inicialização do tracking (visualizado em vídeo)
 cap = cv2.VideoCapture(video_path)
 if not cap.isOpened():
     print(f"[ERRO] Não foi possível abrir o vídeo: {video_path}")
@@ -31,7 +33,7 @@ width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-# Criar pasta de output
+# Criação da pasta de output
 os.makedirs(os.path.dirname(output_path), exist_ok=True)
 out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (width, height))
 
@@ -127,39 +129,42 @@ try:
                 continue
 
             track_id = int(track_id)
-            if class_id is not None:
-                class_id = int(class_id)
+            class_id = int(class_id) if class_id is not None else None
 
+            # Inferir a classe, se necessário
             if class_id is None:
                 class_id = find_class_for_box([x1, y1, x2, y2], bbox_xywh, classes)
 
-            if class_id is not None:
+            if class_id is not None and hasattr(model, 'names') and class_id < len(model.names):
                 class_name = model.names[class_id]
             else:
-                class_name = "unknown"
+                class_name = "desconhecida"
 
             track_id_to_class[track_id] = class_name
 
-            if track_id not in counted_ids and class_name != "unknown":
+            if track_id not in counted_ids and class_name != "desconhecida":
                 counted_ids.add(track_id)
                 vehicle_counts[class_name] = vehicle_counts.get(class_name, 0) + 1
 
-            # Registar confiança média por classe
+            # Confiança média por classe
             if class_name not in class_confidences:
                 class_confidences[class_name] = []
-            if class_id is not None and class_id in classes:
-                idx = classes.index(class_id)
-                conf = confidences[idx]
-                class_confidences[class_name].append(float(conf))
-                label = f"ID:{track_id} {class_name} ({conf:.2f})"
+            if class_id is not None and class_id < len(confidences):
+                try:
+                    idx = classes.index(class_id)
+                    conf = confidences[idx]
+                    class_confidences[class_name].append(float(conf))
+                    label = f"ID:{track_id} {class_name} ({conf:.2f})"
+                except ValueError:
+                    label = f"ID:{track_id} {class_name}"
             else:
                 label = f"ID:{track_id} {class_name}"
 
             color = class_colors.get(class_name, (255, 255, 255))
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+            cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+            cv2.putText(frame, label, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
-        # Overlay com contagens
+        # Mostrar contagens no frame
         start_y = 10
         line_height = 25
         for i, (cls, cnt) in enumerate(vehicle_counts.items()):
@@ -199,3 +204,8 @@ with open(counts_file, 'w', encoding='utf-8') as f:
     f.write(f"TOTAL DETETADO: {total_count}\n")
 
 print(f"[INFO] Estatísticas gravadas em: {counts_file}")
+
+# === GERAÇÃO DO RELATÓRIO COM LLM ===
+print("\n[INFO] A gerar relatório com LLM...\n")
+from report_generator import main as gerar_relatorio_main
+gerar_relatorio_main()
